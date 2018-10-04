@@ -1,9 +1,10 @@
 import Vector from './vector'
 import { ObjectTypes } from './objects/game_object'
 import { SpaceShip, SPACESHIP_WARP_COOLDOWN } from './objects/spaceship'
-import Asteroid from './objects/asteroid'
+import Asteroid, { AsteroidNodes } from './objects/asteroid'
 import UFO from './objects/ufo'
 import Play from './game_states/play'
+import Preparing from './game_states/preparing'
 
 // ----------------------------------------------- Constants --------------------------------------------------- //
 
@@ -57,13 +58,16 @@ export const WarpBounds = {
 const INIT_ASTEROID_COUNT = 3
 
 /** Number of UFOs in first level */
-const INIT_UFO_COUNT = 1
+const INIT_UFO_COUNT = 0
 
 /** Number of asteroids added each level */
 const ASTEROID_LEVEL_ADDITION = 1
 
 /** Number of UFOs added each level */
 const UFOS_LEVEL_ADDITION = 1 / 3
+
+/** Number of nodes added to asteroids' upper limit */
+const ASTEROID_NODE_LEVEL_ADDITION = 1 / 2
 
 // ----------------------------------------------- Variables -------------------------------------------------- //
 
@@ -117,6 +121,9 @@ var asteroids = []
 /** Array of currently active UFOs */
 var ufos = []
 
+/** Currently allowed maximal number of asteroid nodes */
+var maxAsteroidNodes = AsteroidNodes.min
+
 /** Current score of player */
 export var score = 0
 
@@ -146,6 +153,13 @@ function clone(object) {
  */
 function increaseScore(amount) {
     score += Math.floor(amount)
+}
+
+/**
+ * Retrieves the current maximal asteroid size (in nodes)
+ */
+export function getMaxAsteroidSize() {
+    return maxAsteroidNodes
 }
 
 /**
@@ -207,8 +221,6 @@ export function actObjects() {
     iterateOverGameObjects((object) => {
         object.act()
     })
-
-    state.act()
 }
 
 /**
@@ -241,6 +253,8 @@ export function createNextLevel() {
     var asteroidCount = Math.floor(INIT_ASTEROID_COUNT + level * ASTEROID_LEVEL_ADDITION)
     var ufoCount = Math.floor(INIT_UFO_COUNT + level * UFOS_LEVEL_ADDITION)
 
+    maxAsteroidNodes = Math.min(AsteroidNodes.max, Math.floor(AsteroidNodes.min + level * ASTEROID_NODE_LEVEL_ADDITION)) 
+
     for(var i = 0; i < asteroidCount; i++) {
         asteroids.push(new Asteroid())
     }
@@ -255,6 +269,22 @@ export function createNextLevel() {
  */
 export function isLevelCleared() {
     return asteroids.length == 0 && ufos.length == 0
+}
+
+/**
+ * Sets all game variables to their initial state
+ */
+export function restartGame() {
+    spaceShip = new SpaceShip(new Vector(CANVAS_WIDTH/2, CANVAS_HEIGHT/2))
+
+    level = 0
+    score = 0
+
+    asteroids = []
+    bullets = []
+    ufos = []
+
+    state = new Preparing()
 }
 
 // ------------------------------------------------ Render --------------------------------------------------- //
@@ -499,14 +529,6 @@ export function handleCollisions() {
 }
 
 /**
- * Handles situation when spaceship gets destroyed
- */
-function handleGameEnd() {
-    console.log('GAME OVER!')
-    // TODO: Implement proper game ending
-}
-
-/**
  * Switches the state of the game
  *
  * @param {GameState} newState New state of the game
@@ -571,6 +593,8 @@ export function gameLoop(timestamp) {
     var elapsedTime = timestamp - initialTime
     initialTime = timestamp
 
+    state.act()
+
     update(elapsedTime)
 
     collectGarbage()
@@ -578,8 +602,7 @@ export function gameLoop(timestamp) {
     render(elapsedTime)
 
     if(spaceShip.toDispose) {
-        handleGameEnd()
-        return
+        state.handleGameEnd()
     }
 
     prevInput = clone(currInput)
